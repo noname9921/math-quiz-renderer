@@ -35,12 +35,6 @@ function permutations<T>(arr: T[]): T[][] {
   return result;
 }
 
-function ordinal(n: number): string {
-  const suffixes: Record<number, string> = { 1: "st", 2: "nd", 3: "rd" };
-  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
-  return `${n}${suffixes[n % 10] ?? "th"}`;
-}
-
 // ============ GLOBALS ============
 
 const shapePattern: Record<number, string> = {
