@@ -8,7 +8,9 @@ const router = createBrowserRouter([
     path: '/',
     element: <App />,
   },
-])
+], {
+  basename: "/math-quiz-renderer",
+})
 
 createRoot(document.getElementById('root')!).render(
   <RouterProvider router={router} />

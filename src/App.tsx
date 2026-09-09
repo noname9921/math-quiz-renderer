@@ -1,16 +1,41 @@
 import { generateFullTest, type BuiltQuestion } from "./utils/generateQuestions";
 import { Shape, CubeCube } from "./utils/DrawShapes";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 
-const test = generateFullTest();
+const STORAGE_KEY = "timo_test_progress_v1";
+const THEME_KEY = "theme"
+const TEST_DURATION_SECONDS = 90 * 60;
+const QUESTIONS_PER_PAGE = 42;
 
-const SECTIONS = [
-  { label: "Phần 1: Kĩ năng tư duy", questions: test.section1 },
-  { label: "Phần 2: Kĩ năng tính toán", questions: test.section2 },
-  { label: "Phần 3: Số học", questions: test.section3 },
-  { label: "Phần 4: Hình học", questions: test.section4 },
-  { label: "Phần 5: Tổ hợp", questions: test.section5 },
-];
+function loadTheme(): ThemeName | null {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    if (raw === "red" || raw === "blue" || raw === "purple") return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveTheme(theme: ThemeName) {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // ignore
+  }
+}
+
+interface SavedState {
+  test: FullTest;
+  selected: (string | null)[];
+  cq: number;
+  timeLeft: number;
+  submitted: boolean;
+  savedAt: number;
+}
+
+type ThemeName = "red" | "blue" | "purple";
+type FullTest = ReturnType<typeof generateFullTest>;
 
 interface FlatQuestion {
   sectionLabel: string;
@@ -18,13 +43,38 @@ interface FlatQuestion {
   question: BuiltQuestion;
 }
 
-const ALL_QUESTIONS: FlatQuestion[] = SECTIONS.flatMap((section) =>
-  section.questions.map((q, i) => ({ sectionLabel: section.label, localIndex: i + 1, question: q }))
-);
+interface SavedState {
+  test: FullTest;
+  selected: (string | null)[];
+  cq: number;
+  timeLeft: number;
+  submitted: boolean;
+  themeName: ThemeName;
+  savedAt: number;
+}
 
-const TOTAL = ALL_QUESTIONS.length;
+function loadSaved(): SavedState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SavedState;
+  } catch {
+    return null;
+  }
+}
 
-type ThemeName = "red" | "blue" | "purple";
+function buildFlatQuestions(test: FullTest): FlatQuestion[] {
+  const SECTIONS = [
+    { label: "Phần 1: Kĩ năng tư duy", questions: test.section1 },
+    { label: "Phần 2: Kĩ năng tính toán", questions: test.section2 },
+    { label: "Phần 3: Số học", questions: test.section3 },
+    { label: "Phần 4: Hình học", questions: test.section4 },
+    { label: "Phần 5: Tổ hợp", questions: test.section5 },
+  ];
+  return SECTIONS.flatMap((section) =>
+    section.questions.map((q, i) => ({ sectionLabel: section.label, localIndex: i + 1, question: q }))
+  );
+}
 
 const THEMES: Record<ThemeName, {
   swatch: string; primaryBg: string; primaryBgHover: string; primaryText: string;
@@ -40,20 +90,24 @@ function BelowTitle({ question }: { question: BuiltQuestion }) {
   if (below_title == null) return null;
 
   if (type === "shapes_pattern") {
+    const shapes = below_title as string[];
+    const w = Math.max(400, shapes.length * 60);
     return (
-      <svg viewBox="0 0 400 60" className="mx-auto w-full max-w-[400px] h-auto" shapeRendering="geometricPrecision">
-        {(below_title as string[]).map((shapeType, i) => (
-          <g key={i} transform={`translate(${i * 60}, 10)`}><Shape type={shapeType as any} size={25} /></g>
+      <svg viewBox={`0 0 ${w} 60`} className="mx-auto w-full max-w-[400px] h-auto" shapeRendering="geometricPrecision">
+        {shapes.map((shapeType, i) => (
+          <g key={i} transform={`translate(${i * 60 + 10}, 10)`}><Shape type={shapeType as any} size={25} /></g>
         ))}
       </svg>
     );
   }
 
   if (type === "rotations_pattern") {
+    const rots = below_title as number[];
+    const w = Math.max(400, rots.length * 60);
     return (
-      <svg viewBox="0 0 400 60" className="mx-auto w-full max-w-[400px] h-auto" shapeRendering="geometricPrecision">
-        {(below_title as number[]).map((rotationDeg, i) => (
-          <g key={i} transform={`translate(${i * 60}, 10)`}><Shape type="right_triangle" size={25} rotationDeg={rotationDeg} /></g>
+      <svg viewBox={`0 0 ${w} 60`} className="mx-auto w-full max-w-[400px] h-auto" shapeRendering="geometricPrecision">
+        {rots.map((rotationDeg, i) => (
+          <g key={i} transform={`translate(${i * 60 + 10}, 10)`}><Shape type="right_triangle" size={25} rotationDeg={rotationDeg} /></g>
         ))}
       </svg>
     );
@@ -65,13 +119,13 @@ function BelowTitle({ question }: { question: BuiltQuestion }) {
       <div className="flex flex-col sm:flex-row justify-center items-center gap-6 sm:gap-16">
         <div className="text-center">
           <p className="text-sm sm:text-base text-gray-500 mb-1">Mặt trước</p>
-          <svg viewBox="0 0 150 150" className="w-28 h-28 sm:w-[150px] sm:h-[150px]" shapeRendering="geometricPrecision">
+          <svg viewBox="0 0 170 170" className="w-28 h-28 sm:w-[150px] sm:h-[150px]" shapeRendering="geometricPrecision">
             <CubeCube x={20} y={100} length={20} grid={cube_front} />
           </svg>
         </div>
         <div className="text-center">
           <p className="text-sm sm:text-base text-gray-500 mb-1">Mặt sau</p>
-          <svg viewBox="0 0 150 150" className="w-28 h-28 sm:w-[150px] sm:h-[150px]" shapeRendering="geometricPrecision">
+          <svg viewBox="0 0 170 170" className="w-28 h-28 sm:w-[150px] sm:h-[150px]" shapeRendering="geometricPrecision">
             <CubeCube x={20} y={100} length={20} grid={cube_back} />
           </svg>
         </div>
@@ -82,15 +136,16 @@ function BelowTitle({ question }: { question: BuiltQuestion }) {
   if (type === "count_2d") {
     const grid = below_title as number[][];
     const cell = 24;
+    const pad = 4;
     return (
       <svg
-        viewBox={`0 0 ${grid[0].length * cell} ${grid.length * cell}`}
+        viewBox={`0 0 ${grid[0].length * cell + pad * 2} ${grid.length * cell + pad * 2}`}
         className="mx-auto w-full max-w-[240px] sm:max-w-none h-auto"
-        style={{ maxWidth: grid[0].length * cell }}
+        style={{ maxWidth: grid[0].length * cell + pad * 2 }}
         shapeRendering="crispEdges"
       >
         {grid.map((row, i) => row.map((val, j) => val === 1 ? (
-          <rect key={`${i}-${j}`} x={j * cell} y={i * cell} width={cell} height={cell} fill="none" stroke="black" strokeWidth={1.5} />
+          <rect key={`${i}-${j}`} x={j * cell + pad} y={i * cell + pad} width={cell} height={cell} fill="none" stroke="black" strokeWidth={1.5} />
         ) : null))}
       </svg>
     );
@@ -139,39 +194,152 @@ function AnswerOption({
 }
 
 function QuestionGrid({
-  selected, current, onJump, theme, submitted,
+  allQuestions, totalPages, selected, current, onJump, theme, submitted,
 }: {
-  selected: (string | null)[]; current: number; onJump: (i: number) => void; theme: typeof THEMES[ThemeName]; submitted: boolean;
+  allQuestions: FlatQuestion[]; totalPages: number; selected: (string | null)[]; current: number;
+  onJump: (i: number) => void; theme: typeof THEMES[ThemeName]; submitted: boolean;
 }) {
+  const [page, setPage] = useState(() => Math.floor(current / QUESTIONS_PER_PAGE));
+
+  useEffect(() => {
+    setPage(Math.floor(current / QUESTIONS_PER_PAGE));
+  }, [current]);
+
+  const total = allQuestions.length;
+  const pageStart = page * QUESTIONS_PER_PAGE;
+  const pageEnd = Math.min(pageStart + QUESTIONS_PER_PAGE, total);
+  const pageIndices = Array.from({ length: pageEnd - pageStart }, (_, k) => pageStart + k);
+
   return (
-    <div className="grid grid-cols-8 sm:grid-cols-6 gap-1.5 sm:gap-2">
-      {ALL_QUESTIONS.map((fq, i) => {
-        const isAnswered = selected[i] !== null;
-        const isCurrent = i === current;
-        const isCorrect = submitted && selected[i] === fq.question.answer;
-        const isWrong = submitted && isAnswered && !isCorrect;
-        const base = "w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-sm sm:text-base font-medium cursor-pointer transition-colors border-2";
-        const style = isCorrect
-          ? `${base} bg-green-100 border-green-500 text-green-700`
-          : isWrong
-            ? `${base} bg-red-100 border-red-500 text-red-700`
-            : isCurrent
-              ? `${base} ${theme.primaryBg} text-white border-transparent`
-              : isAnswered
-                ? `${base} ${theme.lightBg} ${theme.border} ${theme.primaryText}`
-                : `${base} bg-gray-50 border-gray-200 text-gray-400`;
-        return <div key={i} className={style} onClick={() => onJump(i)}>{i + 1}</div>;
-      })}
+    <div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mb-2">
+          <button
+            className={`text-xs sm:text-sm px-2 py-1 rounded-lg ${theme.lightBg} ${theme.primaryText} disabled:opacity-30 disabled:cursor-not-allowed`}
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            ←
+          </button>
+          <span className="text-xs sm:text-sm text-gray-500">
+            Page {page + 1}/{totalPages}
+          </span>
+          <button
+            className={`text-xs sm:text-sm px-2 py-1 rounded-lg ${theme.lightBg} ${theme.primaryText} disabled:opacity-30 disabled:cursor-not-allowed`}
+            disabled={page === totalPages - 1}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          >
+            →
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-8 sm:grid-cols-6 gap-1.5 sm:gap-2">
+        {pageIndices.map((i) => {
+          const fq = allQuestions[i];
+          const isAnswered = selected[i] !== null;
+          const isCurrent = i === current;
+          const isCorrect = submitted && selected[i] === fq.question.answer;
+          const isWrong = submitted && isAnswered && !isCorrect;
+          const base = "w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-sm sm:text-base font-medium cursor-pointer transition-colors border-2";
+          const style = isCorrect
+            ? `${base} bg-green-100 border-green-500 text-green-700`
+            : isWrong
+              ? `${base} bg-red-100 border-red-500 text-red-700`
+              : isCurrent
+                ? `${base} ${theme.primaryBg} text-white border-transparent`
+                : isAnswered
+                  ? `${base} ${theme.lightBg} ${theme.border} ${theme.primaryText}`
+                  : `${base} bg-gray-50 border-gray-200 text-gray-400`;
+          return <div key={i} className={style} onClick={() => onJump(i)}>{i + 1}</div>;
+        })}
+      </div>
     </div>
   );
 }
 
+function formatTime(totalSeconds: number) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function App() {
-  const [cq, setCq] = useState(0);
-  const [selected, setSelected] = useState<(string | null)[]>(Array(TOTAL).fill(null));
-  const [themeName, setThemeName] = useState<ThemeName>("purple");
-  const [submitted, setSubmitted] = useState(false);
+  const initial = useMemo(() => loadSaved(), []);
+
+  const [test, setTest] = useState<FullTest>(() => initial?.test ?? generateFullTest());
+  const [cq, setCq] = useState(() => initial?.cq ?? 0);
+  const [submitted, setSubmitted] = useState(() => initial?.submitted ?? false);
+  const [timeLeft, setTimeLeft] = useState(() => initial?.timeLeft ?? TEST_DURATION_SECONDS);
+
+  const [selected, setSelected] = useState<(string | null)[]>(
+    () => initial?.selected ?? Array(buildFlatQuestions(initial?.test ?? generateFullTest()).length).fill(null)
+  );
+  const [themeName, setThemeName] = useState<ThemeName>(() => loadTheme() ?? "purple");
+
+  useEffect(() => {
+    saveTheme(themeName);
+  }, [themeName]);
+
+  // main autosave effect — drop themeName from the payload
+  useEffect(() => {
+    // @ts-ignore
+    const state: SavedState = { test, selected, cq, timeLeft, submitted, savedAt: Date.now() };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // storage full or unavailable — fail silently
+    }
+  }, [test, selected, cq, timeLeft, submitted]);
+
   const theme = THEMES[themeName];
+
+  const ALL_QUESTIONS = useMemo(() => buildFlatQuestions(test), [test]);
+  const TOTAL = ALL_QUESTIONS.length;
+  const TOTAL_PAGES = Math.ceil(TOTAL / QUESTIONS_PER_PAGE);
+
+  // guard against a stale saved `selected` array whose length doesn't match a freshly regenerated test
+  useEffect(() => {
+    if (selected.length !== TOTAL) {
+      setSelected(Array(TOTAL).fill(null));
+      setCq(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [test]);
+
+  // autosave on every interaction
+  useEffect(() => {
+    const state: SavedState = { test, selected, cq, timeLeft, submitted, themeName, savedAt: Date.now() };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // storage full or unavailable — fail silently, don't block the UI
+    }
+  }, [test, selected, cq, timeLeft, submitted, themeName]);
+
+  useEffect(() => {
+    if (submitted) return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setSubmitted(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [submitted]);
+
+  if (selected.length !== TOTAL) {
+    // render nothing meaningful for the one tick between test-mismatch detection and the reset effect firing
+    return null;
+  }
 
   const current = ALL_QUESTIONS[cq];
   const { question, sectionLabel, localIndex } = current;
@@ -184,12 +352,24 @@ export default function App() {
     setSelected((prev) => prev.map((val, i) => (i === cq ? letter : val)));
   };
 
+  const handleRetry = () => {
+    const freshTest = generateFullTest();
+    const freshTotal = buildFlatQuestions(freshTest).length;
+    setTest(freshTest);
+    setSelected(Array(freshTotal).fill(null));
+    setCq(0);
+    setSubmitted(false);
+    setTimeLeft(TEST_DURATION_SECONDS);
+  };
+
   const answers: [string, string | number][] = [
     ["A", question.answerA], ["B", question.answerB], ["C", question.answerC], ["D", question.answerD],
   ];
 
   const answeredCount = selected.filter((s) => s !== null).length;
   const score = ALL_QUESTIONS.filter((fq, i) => selected[i] === fq.question.answer).length;
+
+  const timeIsLow = !submitted && timeLeft <= 60;
 
   return (
     <div className="w-full min-h-screen bg-gray-50 flex flex-col lg:flex-row justify-between items-stretch gap-6 lg:gap-16 py-6 px-4 sm:px-8 lg:py-10 lg:px-16">
@@ -198,7 +378,12 @@ export default function App() {
       <div className="flex-1 lg:max-w-3xl bg-white rounded-2xl shadow-md p-5 sm:p-8 pb-24 lg:pb-28 min-h-[70vh] lg:h-[90vh] relative order-1">
         <div className="flex items-center justify-between mb-2 gap-2">
           <span className={`text-sm sm:text-lg font-semibold ${theme.primaryText}`}>{sectionLabel}</span>
-          <span className="text-sm sm:text-lg text-gray-400 shrink-0">{cq + 1} / {TOTAL}</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className={`text-sm sm:text-lg font-semibold px-2.5 py-1 rounded-lg ${timeIsLow ? "bg-red-100 text-red-600 animate-pulse" : "bg-gray-100 text-gray-600"}`}>
+              ⏱ {formatTime(timeLeft)}
+            </span>
+            <span className="text-sm sm:text-lg text-gray-400">{cq + 1} / {TOTAL}</span>
+          </div>
         </div>
         <div className="w-full h-2 bg-gray-200 rounded-full mb-6 sm:mb-8">
           <div className={`h-2 ${theme.primaryBg} rounded-full transition-all`} style={{ width: `${((cq + 1) / TOTAL) * 100}%` }} />
@@ -241,16 +426,17 @@ export default function App() {
           </button>
         ) : (
           <div className="mb-6">
-            <p className="text-xl sm:text-2xl font-bold text-green-600 mb-2">Score: {score}/{TOTAL}</p>
-            <button onClick={() => { setSubmitted(false); setSelected(Array(TOTAL).fill(null)); setCq(0); }} className="w-full bg-gray-600 hover:bg-gray-700 text-white text-base sm:text-lg font-semibold py-2.5 rounded-xl transition-colors">
-              Retry
+            <p className="text-xl sm:text-2xl font-bold text-green-600 mb-2">Score: {score}/{TOTAL} ({(score / TOTAL * 10).toFixed(2)}/10)</p>
+            {timeLeft === 0 && <p className="text-sm text-red-500 mb-2">Time's up — auto-submitted</p>}
+            <button onClick={handleRetry} className="w-full bg-gray-600 hover:bg-gray-700 text-white text-base sm:text-lg font-semibold py-2.5 rounded-xl transition-colors">
+              Retry (new test)
             </button>
           </div>
         )}
 
         <p className="text-base sm:text-lg font-semibold text-gray-700 mb-1">Progress: {answeredCount} / {TOTAL}</p>
         <p className="text-xs sm:text-sm text-gray-400 mb-3">Click a number to jump</p>
-        <QuestionGrid selected={selected} current={cq} onJump={setCq} theme={theme} submitted={submitted} />
+        <QuestionGrid allQuestions={ALL_QUESTIONS} totalPages={TOTAL_PAGES} selected={selected} current={cq} onJump={setCq} theme={theme} submitted={submitted} />
       </div>
     </div>
   );

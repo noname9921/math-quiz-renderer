@@ -566,7 +566,7 @@ function generate2dStructCount(): Count2dQuestion {
       if (v === 1) count++;
     }
   }
-  return { type: "count_2d", grid, answer: count + 1 };
+  return { type: "count_2d", grid, answer: count };
 }
 
 type Section4Question = CountMaterialsQuestion | CountVisibleQuestion | Count2dQuestion;
@@ -920,9 +920,9 @@ function constructQuestions(rawQuestions: RawQuestion[]): BuiltQuestion[] {
 export function generateFullTest() {
   return {
     section1: constructQuestions(generateSection1(10)),
-    section2: constructQuestions(generateSection2(15)),
-    section3: constructQuestions(generateSection3(10)),
-    section4: constructQuestions(generateQuestionsS4(10)),
-    section5: constructQuestions(generateQuestionsS5(10)),
+    section2: constructQuestions(generateSection2(10)),
+    section3: constructQuestions(generateSection3(15)),
+    section4: constructQuestions(generateQuestionsS4(20)),
+    section5: constructQuestions(generateQuestionsS5(5)),
   };
 }
